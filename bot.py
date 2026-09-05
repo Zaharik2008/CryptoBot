@@ -39,8 +39,12 @@ ZEC, из них майнерам достаётся 80% = 1.25 ZEC. Следу�
 на "выдуманных" цифрах, чтобы не давать пользователю неверную информацию.
 """
 
+import csv
+import io
 import logging
 import os
+from typing import Optional
+
 import requests
 from telegram import (
     Update,
@@ -65,6 +69,20 @@ BOT_TOKEN = "8868576930:AAFs7Ebe6SRXSd2o_QO2bwMxvlxYzFGYT_Q"
 # (тот же файл, который вы загружаете на GitHub).
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WELCOME_IMAGE_PATH = os.path.join(BASE_DIR, "welcome.jpg")
+
+# Ссылка на прайс-лист в Google Таблице, опубликованный как CSV.
+# Как получить: Файл → Поделиться → Опубликовать в интернете → выбрать
+# нужный лист → формат CSV → Опубликовать → скопировать ссылку сюда.
+# Таблица должна иметь два столбца без заголовка или с заголовком:
+# Модель | Цена  (название модели должно точно совпадать с тем, что
+# показывает бот — см. названия в MODELS ниже, например "Antminer S21").
+# Если оставить пустой строкой — бот всегда будет спрашивать цену вручную.
+PRICE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1rp9ysU2V3F4ynjJNHcP7l_unBvV-5v0K/export?format=csv&gid=45461405"
+
+# Канал, на который нужно подписаться, чтобы пользоваться ботом.
+# ВАЖНО: бот должен быть добавлен в этот канал администратором — иначе
+# Telegram не даст ему проверять, кто подписан.
+REQUIRED_CHANNEL = "@crypto_point38"
 
 # Конфигурация поддерживаемых монет.
 COINS = {
@@ -203,6 +221,7 @@ logger = logging.getLogger(__name__)
 
 # Состояния диалога
 (
+    CHECK_SUBSCRIPTION,
     CHOOSING_COIN,
     CHOOSING_MANUFACTURER,
     CHOOSING_FAMILY,
@@ -211,10 +230,67 @@ logger = logging.getLogger(__name__)
     POWER,
     PRICE,
     TARIFF,
-) = range(8)
+) = range(9)
+
+
+async def is_subscribed(bot, user_id: int) -> bool:
+    """Проверяет подписку пользователя на REQUIRED_CHANNEL.
+    Бот должен быть админом канала, иначе Telegram вернёт ошибку."""
+    try:
+        member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
+        return member.status in ("member", "administrator", "creator")
+    except Exception as e:
+        logger.error(
+            f"Не удалось проверить подписку на {REQUIRED_CHANNEL}: {e}. "
+            f"Проверьте, что бот добавлен в канал администратором."
+        )
+        return False
+
+
+def subscription_prompt_keyboard() -> InlineKeyboardMarkup:
+    channel_url = f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("📢 Открыть канал", url=channel_url)],
+            [InlineKeyboardButton("✅ Я подписался", callback_data="check_sub")],
+        ]
+    )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+
+    if not await is_subscribed(context.bot, user_id):
+        await update.message.reply_text(
+            f"Чтобы пользоваться ботом, подпишитесь на канал {REQUIRED_CHANNEL}, "
+            f"а затем нажмите кнопку ниже.",
+            reply_markup=subscription_prompt_keyboard(),
+        )
+        return CHECK_SUBSCRIPTION
+
+    return await show_coin_menu(update.message, context)
+
+
+async def check_subscription_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    if await is_subscribed(context.bot, user_id):
+        await query.answer("Подписка подтверждена!")
+        await query.message.delete()
+        return await show_coin_menu(query.message, context)
+
+    await query.answer(
+        "Пока не вижу подписку. Убедитесь, что вы подписались, и попробуйте снова.",
+        show_alert=True,
+    )
+    return CHECK_SUBSCRIPTION
+
+
+async def show_coin_menu(message, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Отправляет картинку-заставку и меню выбора монеты."""
     keyboard = [
         [InlineKeyboardButton(cfg["title"], callback_data=code)]
         for code, cfg in COINS.items()
@@ -226,7 +302,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         with open(WELCOME_IMAGE_PATH, "rb") as photo:
-            await update.message.reply_photo(
+            await message.reply_photo(
                 photo=photo,
                 caption=caption,
                 reply_markup=InlineKeyboardMarkup(keyboard),
@@ -237,7 +313,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         logger.warning(
             f"Файл {WELCOME_IMAGE_PATH} не найден — отправляю без картинки"
         )
-        await update.message.reply_text(
+        await message.reply_text(
             caption, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
@@ -321,10 +397,9 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         context.user_data["hashrate"] = hashrate
         context.user_data["power_w"] = power_w
         await query.message.reply_text(f"Версия: {label}")
-        await query.message.reply_text(
-            "Введите цену устройства в рублях (например: 250000)"
+        return await proceed_after_model_choice(
+            query.message, context, family_name
         )
-        return PRICE
 
     keyboard = [
         [InlineKeyboardButton(label, callback_data=f"v{i}")]
@@ -347,8 +422,9 @@ async def choose_variant(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data["power_w"] = power_w
 
     await query.edit_message_text(f"Версия: {label}")
-    await query.message.reply_text("Введите цену устройства в рублях (например: 250000)")
-    return PRICE
+    return await proceed_after_model_choice(
+        query.message, context, context.user_data["family_name"]
+    )
 
 
 async def get_hashrate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -519,7 +595,49 @@ def calculate_profitability(
     )
 
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+def get_price_from_sheet(model_name: str) -> Optional[float]:
+    """Ищет цену модели в опубликованном CSV прайс-листе.
+    Возвращает None, если ссылка не настроена, модель не найдена или
+    запрос не прошёл (тогда бот просто попросит цену вручную)."""
+    if not PRICE_SHEET_CSV_URL:
+        return None
+
+    try:
+        r = requests.get(PRICE_SHEET_CSV_URL, timeout=10)
+        r.raise_for_status()
+        reader = csv.reader(io.StringIO(r.text))
+        for row in reader:
+            if len(row) < 2:
+                continue
+            name, price_str = row[0].strip(), row[1].strip()
+            if name.lower() == model_name.lower():
+                try:
+                    return float(price_str.replace(" ", "").replace(",", "."))
+                except ValueError:
+                    return None
+    except Exception as e:
+        logger.warning(f"Не удалось прочитать прайс-лист: {e}")
+
+    return None
+
+
+async def proceed_after_model_choice(
+    message, context: ContextTypes.DEFAULT_TYPE, family_name: str
+) -> int:
+    """После того как хешрейт/потребление известны — пробует найти цену
+    в прайс-листе; если не нашёл, просит ввести цену вручную."""
+    price = get_price_from_sheet(family_name)
+
+    if price is not None:
+        context.user_data["price_rub"] = price
+        await message.reply_text(
+            f"Цена по вашему прайсу: {price:,.0f} ₽\n\n"
+            f"Тариф на электричество в руб/кВт·ч (например: 4.5)"
+        )
+        return TARIFF
+
+    await message.reply_text("Введите цену устройства в рублях (например: 250000)")
+    return PRICE
     await update.message.reply_text("Отменено. Наберите /start, чтобы начать заново.")
     return ConversationHandler.END
 
@@ -530,6 +648,9 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
+            CHECK_SUBSCRIPTION: [
+                CallbackQueryHandler(check_subscription_callback)
+            ],
             CHOOSING_COIN: [CallbackQueryHandler(choose_coin)],
             CHOOSING_MANUFACTURER: [CallbackQueryHandler(choose_manufacturer)],
             CHOOSING_FAMILY: [CallbackQueryHandler(choose_family)],
