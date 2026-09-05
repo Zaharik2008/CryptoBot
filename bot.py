@@ -44,7 +44,7 @@ from telegram.ext import (
 )
 
 # ==== НАСТРОЙКИ ====
-BOT_TOKEN = "ВАШ_ТОКЕН_СЮДА"  # <-- вставьте токен, который дал BotFather
+BOT_TOKEN = "8868576930:AAFs7Ebe6SRXSd2o_QO2bwMxvlxYzFGYT_Q"  # <-- вставьте токен, который дал BotFather
 
 # Конфигурация поддерживаемых монет.
 # block_reward обновляется только на халвинге (редкое, известное заранее
