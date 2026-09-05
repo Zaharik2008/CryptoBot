@@ -44,7 +44,7 @@ from telegram.ext import (
 )
 
 # ==== НАСТРОЙКИ ====
-BOT_TOKEN = "8868576930:AAFs7Ebe6SRXSd2o_QO2bwMxvlxYzFGYT_Q"  # <-- вставьте токен, который дал BotFather
+BOT_TOKEN = "8868576930:AAFs7Ebe6SRXSd2o_QO2bwMxvlxYzFGYT_Q"
 
 # Конфигурация поддерживаемых монет.
 # block_reward обновляется только на халвинге (редкое, известное заранее
@@ -92,6 +92,22 @@ MODELS = {
         ("Antminer S21 — 200 TH/s / 3550 Вт", 200, 3550),
         ("Antminer S21 XP — 270 TH/s / 3645 Вт", 270, 3645),
         ("Antminer S21 XP Hyd — 473 TH/s / 5676 Вт", 473, 5676),
+        ("Whatsminer M30S++ — 104 TH/s / 3224 Вт", 104, 3224),
+        ("Whatsminer M50S — 140 TH/s / 3500 Вт", 140, 3500),
+        ("Whatsminer M50S+ — 148 TH/s / 3404 Вт", 148, 3404),
+        ("Whatsminer M50S++ — 140 TH/s / 3080 Вт", 140, 3080),
+        ("Whatsminer M60 — 160 TH/s / 3184 Вт", 160, 3184),
+        ("Whatsminer M60S — 188 TH/s / 3478 Вт", 188, 3478),
+        ("Whatsminer M60S+ — 200 TH/s / 3600 Вт", 200, 3600),
+        ("Whatsminer M60S++ — 218 TH/s / 3379 Вт", 218, 3379),
+        ("Whatsminer M63 — 372 TH/s / 7403 Вт", 372, 7403),
+        ("Whatsminer M63S — 408 TH/s / 7344 Вт", 408, 7344),
+        ("Whatsminer M63S+ — 402 TH/s / 6834 Вт", 402, 6834),
+        ("Whatsminer M63S++ — 464 TH/s / 7192 Вт", 464, 7192),
+        ("Whatsminer M66 — 276 TH/s / 5492 Вт", 276, 5492),
+        ("Whatsminer M66S — 290 TH/s / 5365 Вт", 290, 5365),
+        ("Whatsminer M66S+ — 342 TH/s / 5814 Вт", 342, 5814),
+        ("Whatsminer M66S++ — 348 TH/s / 5394 Вт", 348, 5394),
     ],
     "Scrypt": [
         ("Antminer L7 8.8 GH/s / 3168 Вт", 8800, 3168),
