@@ -40,6 +40,7 @@ ZEC, из них майнерам достаётся 80% = 1.25 ZEC. Следу�
 """
 
 import logging
+import os
 import requests
 from telegram import (
     Update,
@@ -59,6 +60,11 @@ from telegram.ext import (
 
 # ==== НАСТРОЙКИ ====
 BOT_TOKEN = "8868576930:AAFs7Ebe6SRXSd2o_QO2bwMxvlxYzFGYT_Q"
+
+# Картинка-заставка для /start — должна лежать рядом с bot.py в репозитории
+# (тот же файл, который вы загружаете на GitHub).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WELCOME_IMAGE_PATH = os.path.join(BASE_DIR, "welcome.jpg")
 
 # Конфигурация поддерживаемых монет.
 COINS = {
@@ -213,11 +219,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         [InlineKeyboardButton(cfg["title"], callback_data=code)]
         for code, cfg in COINS.items()
     ]
-    await update.message.reply_text(
+    caption = (
         "Привет! Посчитаю доходность и окупаемость ASIC-майнера.\n\n"
-        "Какую монету считаем?",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        "Какую монету считаем?"
     )
+
+    try:
+        with open(WELCOME_IMAGE_PATH, "rb") as photo:
+            await update.message.reply_photo(
+                photo=photo,
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+            )
+    except FileNotFoundError:
+        # Картинки нет рядом с bot.py — просто отправляем текст, чтобы бот
+        # не падал.
+        logger.warning(
+            f"Файл {WELCOME_IMAGE_PATH} не найден — отправляю без картинки"
+        )
+        await update.message.reply_text(
+            caption, reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
     return CHOOSING_COIN
 
 
