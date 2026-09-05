@@ -2,23 +2,26 @@
 Telegram-бот для расчёта доходности ASIC-майнеров.
 
 Поддерживаемые монеты/алгоритмы:
-  - BTC (SHA-256)  — Bitcoin ASIC (Antminer S19/S21 и т.п.)
-  - LTC (Scrypt)   — Litecoin ASIC (Antminer L7 и т.п.)
+  - BTC (SHA-256)  — Bitcoin ASIC (Antminer, Whatsminer)
+  - LTC (Scrypt)   — Litecoin ASIC (Antminer L7)
   - DOGE (Scrypt)  — Dogecoin ASIC (обычно те же устройства, что и LTC)
 
 Как это работает:
 1. Пользователь пишет /start
 2. Выбирает монету кнопкой
-3. Выбирает готовую модель асика из списка ИЛИ вводит хешрейт/потребление
-   вручную
-4. Вводит цену асика (руб) и тариф на э/энергию (руб/кВт·ч)
-5. Бот берёт курс монеты и сложность сети через открытые официальные API
+3. Выбирает производителя (Antminer / Whatsminer) ИЛИ вводит всё вручную
+4. Выбирает модель (например, Antminer S21)
+5. Если у модели несколько версий по хешрейту/охлаждению (Air/Hydro/
+   Immersion и т.п.) — выбирает нужную; если версия одна — бот
+   подставляет её автоматически
+6. Вводит цену асика (руб) и тариф на э/энергию (руб/кВт·ч)
+7. Бот берёт курс монеты и сложность сети через открытые официальные API
    (CoinGecko — курс, Blockchair — сложность сети) и считает доходность
 
-Модели асиков и их характеристики (хешрейт/потребление) обновлены на
-момент написания бота вручную — производители выпускают новые модели
-регулярно, поэтому раз в несколько месяцев стоит свериться с актуальными
-характеристиками и обновить список MODELS ниже.
+Характеристики моделей (хешрейт/потребление) обновлены на момент
+написания бота вручную по официальным данным производителей — раз в
+несколько месяцев стоит свериться с актуальными характеристиками и
+обновить список MODELS ниже, так как линейки регулярно пополняются.
 
 Если запрос к API не прошёл (нет интернета на сервере, лимиты и т.п.),
 бот сообщает об этом и просит попробовать позже — расчёт не делается
@@ -83,37 +86,56 @@ COINS = {
     },
 }
 
-# Готовые модели асиков по алгоритмам: (название, хешрейт, потребление в Вт).
-# Хешрейт указан в тех же единицах, что и hr_unit соответствующей монеты
-# (TH/s для SHA-256, MH/s для Scrypt).
+# Модели асиков: MODELS[алгоритм][производитель][модель] = список версий.
+# Каждая версия — (подпись, хешрейт, потребление в Вт). Хешрейт в тех же
+# единицах, что и hr_unit соответствующей монеты (TH/s для SHA-256,
+# MH/s для Scrypt).
 MODELS = {
-    "SHA-256": [
-        ("Antminer S19 XP — 141 TH/s / 3010 Вт", 141, 3010),
-        ("Antminer S21 — 200 TH/s / 3550 Вт", 200, 3550),
-        ("Antminer S21 XP — 270 TH/s / 3645 Вт", 270, 3645),
-        ("Antminer S21 XP Hyd — 473 TH/s / 5676 Вт", 473, 5676),
-        ("Whatsminer M30S++ — 104 TH/s / 3224 Вт", 104, 3224),
-        ("Whatsminer M50S — 140 TH/s / 3500 Вт", 140, 3500),
-        ("Whatsminer M50S+ — 148 TH/s / 3404 Вт", 148, 3404),
-        ("Whatsminer M50S++ — 140 TH/s / 3080 Вт", 140, 3080),
-        ("Whatsminer M60 — 160 TH/s / 3184 Вт", 160, 3184),
-        ("Whatsminer M60S — 188 TH/s / 3478 Вт", 188, 3478),
-        ("Whatsminer M60S+ — 200 TH/s / 3600 Вт", 200, 3600),
-        ("Whatsminer M60S++ — 218 TH/s / 3379 Вт", 218, 3379),
-        ("Whatsminer M63 — 372 TH/s / 7403 Вт", 372, 7403),
-        ("Whatsminer M63S — 408 TH/s / 7344 Вт", 408, 7344),
-        ("Whatsminer M63S+ — 402 TH/s / 6834 Вт", 402, 6834),
-        ("Whatsminer M63S++ — 464 TH/s / 7192 Вт", 464, 7192),
-        ("Whatsminer M66 — 276 TH/s / 5492 Вт", 276, 5492),
-        ("Whatsminer M66S — 290 TH/s / 5365 Вт", 290, 5365),
-        ("Whatsminer M66S+ — 342 TH/s / 5814 Вт", 342, 5814),
-        ("Whatsminer M66S++ — 348 TH/s / 5394 Вт", 348, 5394),
-    ],
-    "Scrypt": [
-        ("Antminer L7 8.8 GH/s / 3168 Вт", 8800, 3168),
-        ("Antminer L7 9.3 GH/s / 3425 Вт", 9300, 3425),
-        ("Antminer L7 9.5 GH/s / 3425 Вт", 9500, 3425),
-    ],
+    "SHA-256": {
+        "Antminer": {
+            "Antminer S19 XP": [
+                ("Air — 141 TH/s / 3010 Вт", 141, 3010),
+                ("Hyd — 255 TH/s / 5304 Вт", 255, 5304),
+            ],
+            "Antminer S21": [
+                ("Air — 200 TH/s / 3550 Вт", 200, 3550),
+                ("Immersion — 301 TH/s / 5570 Вт", 301, 5570),
+                ("Hydro — 335 TH/s / 5360 Вт", 335, 5360),
+                ("Hydro 3U — 860 TH/s / 11180 Вт", 860, 11180),
+            ],
+            "Antminer S21 XP": [
+                ("Air — 270 TH/s / 3645 Вт", 270, 3645),
+                ("Hyd — 473 TH/s / 5676 Вт", 473, 5676),
+            ],
+        },
+        "Whatsminer": {
+            "Whatsminer M30S++": [("104 TH/s / 3224 Вт", 104, 3224)],
+            "Whatsminer M50S": [("140 TH/s / 3500 Вт", 140, 3500)],
+            "Whatsminer M50S+": [("148 TH/s / 3404 Вт", 148, 3404)],
+            "Whatsminer M50S++": [("140 TH/s / 3080 Вт", 140, 3080)],
+            "Whatsminer M60": [("160 TH/s / 3184 Вт", 160, 3184)],
+            "Whatsminer M60S": [("188 TH/s / 3478 Вт", 188, 3478)],
+            "Whatsminer M60S+": [("200 TH/s / 3600 Вт", 200, 3600)],
+            "Whatsminer M60S++": [("218 TH/s / 3379 Вт", 218, 3379)],
+            "Whatsminer M63": [("372 TH/s / 7403 Вт", 372, 7403)],
+            "Whatsminer M63S": [("408 TH/s / 7344 Вт", 408, 7344)],
+            "Whatsminer M63S+": [("402 TH/s / 6834 Вт", 402, 6834)],
+            "Whatsminer M63S++": [("464 TH/s / 7192 Вт", 464, 7192)],
+            "Whatsminer M66": [("276 TH/s / 5492 Вт", 276, 5492)],
+            "Whatsminer M66S": [("290 TH/s / 5365 Вт", 290, 5365)],
+            "Whatsminer M66S+": [("342 TH/s / 5814 Вт", 342, 5814)],
+            "Whatsminer M66S++": [("348 TH/s / 5394 Вт", 348, 5394)],
+        },
+    },
+    "Scrypt": {
+        "Antminer": {
+            "Antminer L7": [
+                ("8.8 GH/s / 3168 Вт", 8800, 3168),
+                ("9.3 GH/s / 3425 Вт", 9300, 3425),
+                ("9.5 GH/s / 3425 Вт", 9500, 3425),
+            ],
+        },
+    },
 }
 
 logging.basicConfig(
@@ -123,7 +145,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Состояния диалога
-CHOOSING_COIN, CHOOSING_MODEL, HASHRATE, POWER, PRICE, TARIFF = range(6)
+(
+    CHOOSING_COIN,
+    CHOOSING_MANUFACTURER,
+    CHOOSING_FAMILY,
+    CHOOSING_VARIANT,
+    HASHRATE,
+    POWER,
+    PRICE,
+    TARIFF,
+) = range(8)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -148,22 +179,23 @@ async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     await query.edit_message_text(f"Монета: {coin['title']}")
 
-    models = MODELS[coin["algorithm"]]
+    manufacturers = list(MODELS[coin["algorithm"]].keys())
     keyboard = [
-        [InlineKeyboardButton(label, callback_data=f"m{idx}")]
-        for idx, (label, _, _) in enumerate(models)
+        [InlineKeyboardButton(name, callback_data=name)] for name in manufacturers
     ]
     keyboard.append(
         [InlineKeyboardButton("✍️ Ввести вручную", callback_data="manual")]
     )
     await query.message.reply_text(
-        "Выберите модель асика из списка или введите параметры вручную:",
+        "Выберите производителя:",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
-    return CHOOSING_MODEL
+    return CHOOSING_MANUFACTURER
 
 
-async def choose_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def choose_manufacturer(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
     query = update.callback_query
     await query.answer()
     coin = COINS[context.user_data["coin_code"]]
@@ -177,12 +209,70 @@ async def choose_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         )
         return HASHRATE
 
+    manufacturer = query.data
+    context.user_data["manufacturer"] = manufacturer
+
+    families = list(MODELS[coin["algorithm"]][manufacturer].keys())
+    context.user_data["family_list"] = families
+
+    keyboard = [
+        [InlineKeyboardButton(name, callback_data=f"f{idx}")]
+        for idx, name in enumerate(families)
+    ]
+    await query.edit_message_text(f"Производитель: {manufacturer}")
+    await query.message.reply_text(
+        "Выберите модель:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    return CHOOSING_FAMILY
+
+
+async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    coin = COINS[context.user_data["coin_code"]]
+    manufacturer = context.user_data["manufacturer"]
+
     idx = int(query.data[1:])
-    label, hashrate, power_w = MODELS[coin["algorithm"]][idx]
+    family_name = context.user_data["family_list"][idx]
+    variants = MODELS[coin["algorithm"]][manufacturer][family_name]
+    context.user_data["family_name"] = family_name
+    context.user_data["variants"] = variants
+
+    await query.edit_message_text(f"Модель: {family_name}")
+
+    if len(variants) == 1:
+        # У модели только одна версия — подставляем её и идём дальше.
+        label, hashrate, power_w = variants[0]
+        context.user_data["hashrate"] = hashrate
+        context.user_data["power_w"] = power_w
+        await query.message.reply_text(f"Версия: {label}")
+        await query.message.reply_text(
+            "Введите цену устройства в рублях (например: 250000)"
+        )
+        return PRICE
+
+    keyboard = [
+        [InlineKeyboardButton(label, callback_data=f"v{i}")]
+        for i, (label, _, _) in enumerate(variants)
+    ]
+    await query.message.reply_text(
+        "У этой модели несколько версий по хешрейту/охлаждению — выберите:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    return CHOOSING_VARIANT
+
+
+async def choose_variant(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    idx = int(query.data[1:])
+    label, hashrate, power_w = context.user_data["variants"][idx]
     context.user_data["hashrate"] = hashrate
     context.user_data["power_w"] = power_w
 
-    await query.edit_message_text(f"Модель: {label}")
+    await query.edit_message_text(f"Версия: {label}")
     await query.message.reply_text("Введите цену устройства в рублях (например: 250000)")
     return PRICE
 
@@ -363,7 +453,9 @@ def main() -> None:
         entry_points=[CommandHandler("start", start)],
         states={
             CHOOSING_COIN: [CallbackQueryHandler(choose_coin)],
-            CHOOSING_MODEL: [CallbackQueryHandler(choose_model)],
+            CHOOSING_MANUFACTURER: [CallbackQueryHandler(choose_manufacturer)],
+            CHOOSING_FAMILY: [CallbackQueryHandler(choose_family)],
+            CHOOSING_VARIANT: [CallbackQueryHandler(choose_variant)],
             HASHRATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_hashrate)],
             POWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_power)],
             PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_price)],
