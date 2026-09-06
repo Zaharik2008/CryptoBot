@@ -69,6 +69,10 @@ BOT_TOKEN = "8868576930:AAEEvDk5B3VPPj33IkSMEbT1lSLgIZMX7Zk"
 # (тот же файл, который вы загружаете на GitHub).
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WELCOME_IMAGE_PATH = os.path.join(BASE_DIR, "welcome.jpg")
+BANNER_COIN = os.path.join(BASE_DIR, "banner_coin.jpg")
+BANNER_MANUFACTURER = os.path.join(BASE_DIR, "banner_manufacturer.jpg")
+BANNER_MODEL = os.path.join(BASE_DIR, "banner_model.jpg")
+BANNER_VARIANT = os.path.join(BASE_DIR, "banner_variant.jpg")
 
 # Ссылка на прайс-лист в Google Таблице, опубликованный как CSV.
 # Как получить: Файл → Поделиться → Опубликовать в интернете → выбрать
@@ -320,6 +324,32 @@ async def show_coin_menu(message, context: ContextTypes.DEFAULT_TYPE) -> int:
     return CHOOSING_COIN
 
 
+async def send_menu_photo(message, image_path: str, caption: str, keyboard):
+    """Отправляет меню фирменной картинкой с подписью; если файл не найден
+    рядом с bot.py — отправляет обычным текстом, чтобы бот не падал."""
+    try:
+        with open(image_path, "rb") as photo:
+            await message.reply_photo(
+                photo=photo, caption=caption, reply_markup=keyboard
+            )
+    except FileNotFoundError:
+        logger.warning(f"Файл {image_path} не найден — отправляю без картинки")
+        await message.reply_text(caption, reply_markup=keyboard)
+
+
+async def safe_edit_caption(query, text: str):
+    """Редактирует подпись/текст предыдущего сообщения независимо от того,
+    было оно картинкой или обычным текстом — чтобы не падать на попытке
+    отредактировать не тот тип сообщения."""
+    try:
+        await query.edit_message_caption(caption=text)
+    except Exception:
+        try:
+            await query.edit_message_text(text)
+        except Exception:
+            pass
+
+
 async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -327,13 +357,7 @@ async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     coin = COINS[coin_code]
     context.user_data["coin_code"] = coin_code
 
-    # Сообщение с меню монет может быть фото с подписью (если есть
-    # welcome.jpg) или обычным текстом (если картинки нет) — редактируем
-    # тем способом, который подходит.
-    try:
-        await query.edit_message_caption(caption=f"Монета: {coin['title']}")
-    except Exception:
-        await query.edit_message_text(f"Монета: {coin['title']}")
+    await safe_edit_caption(query, f"Монета: {coin['title']}")
 
     manufacturers = list(MODELS[coin["algorithm"]].keys())
     keyboard = [
@@ -342,9 +366,11 @@ async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     keyboard.append(
         [InlineKeyboardButton("✍️ Ввести вручную", callback_data="manual")]
     )
-    await query.message.reply_text(
+    await send_menu_photo(
+        query.message,
+        BANNER_MANUFACTURER,
         "Выберите производителя:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        InlineKeyboardMarkup(keyboard),
     )
     return CHOOSING_MANUFACTURER
 
@@ -357,7 +383,7 @@ async def choose_manufacturer(
     coin = COINS[context.user_data["coin_code"]]
 
     if query.data == "manual":
-        await query.edit_message_text("Ввод вручную")
+        await safe_edit_caption(query, "Ввод вручную")
         await query.message.reply_text(
             f"Введите хешрейт устройства в {coin['hr_unit']} "
             f"(например: {coin['hr_example']})",
@@ -375,10 +401,12 @@ async def choose_manufacturer(
         [InlineKeyboardButton(name, callback_data=f"f{idx}")]
         for idx, name in enumerate(families)
     ]
-    await query.edit_message_text(f"Производитель: {manufacturer}")
-    await query.message.reply_text(
+    await safe_edit_caption(query, f"Производитель: {manufacturer}")
+    await send_menu_photo(
+        query.message,
+        BANNER_MODEL,
         "Выберите модель:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        InlineKeyboardMarkup(keyboard),
     )
     return CHOOSING_FAMILY
 
@@ -395,7 +423,7 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     context.user_data["family_name"] = family_name
     context.user_data["variants"] = variants
 
-    await query.edit_message_text(f"Модель: {family_name}")
+    await safe_edit_caption(query, f"Модель: {family_name}")
 
     if len(variants) == 1:
         # У модели только одна версия — подставляем её и идём дальше.
@@ -411,9 +439,11 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         [InlineKeyboardButton(label, callback_data=f"v{i}")]
         for i, (label, _, _) in enumerate(variants)
     ]
-    await query.message.reply_text(
+    await send_menu_photo(
+        query.message,
+        BANNER_VARIANT,
         "У этой модели несколько версий по хешрейту/охлаждению — выберите:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        InlineKeyboardMarkup(keyboard),
     )
     return CHOOSING_VARIANT
 
@@ -427,7 +457,7 @@ async def choose_variant(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data["hashrate"] = hashrate
     context.user_data["power_w"] = power_w
 
-    await query.edit_message_text(f"Версия: {label}")
+    await safe_edit_caption(query, f"Версия: {label}")
     return await proceed_after_model_choice(
         query.message, context, context.user_data["family_name"]
     )
