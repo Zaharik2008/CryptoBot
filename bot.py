@@ -512,7 +512,14 @@ async def get_tariff_and_calculate(
         )
         return ConversationHandler.END
 
-    await update.message.reply_text(result, parse_mode="Markdown")
+    try:
+        await update.message.reply_text(result, parse_mode="Markdown")
+    except Exception as e:
+        # Если Telegram не смог разобрать Markdown-разметку — отправляем
+        # обычным текстом, чтобы пользователь в любом случае получил ответ.
+        logger.warning(f"Не удалось отправить с Markdown, отправляю без него: {e}")
+        await update.message.reply_text(result)
+
     return ConversationHandler.END
 
 
@@ -645,6 +652,19 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ловит любые необработанные ошибки, чтобы бот не молчал при сбое,
+    а пользователь получил хоть какой-то ответ вместо тишины."""
+    logger.error(f"Необработанная ошибка: {context.error}")
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "Что-то пошло не так. Попробуйте /start, чтобы начать заново."
+            )
+        except Exception:
+            pass
+
+
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
@@ -671,6 +691,7 @@ def main() -> None:
     )
 
     application.add_handler(conv_handler)
+    application.add_error_handler(error_handler)
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
