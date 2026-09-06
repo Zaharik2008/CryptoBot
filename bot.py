@@ -49,6 +49,7 @@ import requests
 from telegram import (
     Update,
     ReplyKeyboardRemove,
+    ReplyKeyboardMarkup,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
@@ -74,6 +75,11 @@ BANNER_MANUFACTURER = os.path.join(BASE_DIR, "banner_manufacturer.jpg")
 BANNER_MODEL = os.path.join(BASE_DIR, "banner_model.jpg")
 BANNER_VARIANT = os.path.join(BASE_DIR, "banner_variant.jpg")
 RESULT_IMAGE = os.path.join(BASE_DIR, "result_banner.jpg")
+
+# Кнопка "начать заново" — всегда видна внизу экрана в Telegram, работает
+# на любом этапе диалога.
+RESTART_TEXT = "🔄 Начать заново"
+restart_keyboard = ReplyKeyboardMarkup([[RESTART_TEXT]], resize_keyboard=True)
 
 # Ссылка на прайс-лист в Google Таблице, опубликованный как CSV.
 # Как получить: Файл → Поделиться → Опубликовать в интернете → выбрать
@@ -323,6 +329,15 @@ async def show_coin_menu(bot, chat_id: int, context: ContextTypes.DEFAULT_TYPE) 
             chat_id=chat_id, text=caption, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+    # Кнопка "начать заново" — отдельным сообщением, т.к. у сообщения с
+    # фото уже занят reply_markup под инлайн-кнопки монет. Reply-клавиатура
+    # остаётся видна внизу экрана до следующей отправки такого сообщения.
+    await bot.send_message(
+        chat_id=chat_id,
+        text="Кнопка ниже — быстрый рестарт в любой момент.",
+        reply_markup=restart_keyboard,
+    )
+
     return CHOOSING_COIN
 
 
@@ -392,7 +407,7 @@ async def choose_manufacturer(
                 f"Введите хешрейт устройства в {coin['hr_unit']} "
                 f"(например: {coin['hr_example']})"
             ),
-            reply_markup=ReplyKeyboardRemove(),
+            reply_markup=restart_keyboard,
         )
         return HASHRATE
 
@@ -746,8 +761,14 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 def main() -> None:
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Обработчик кнопки "Начать заново" — ставится ПЕРЕД обычным текстовым
+    # обработчиком в каждом состоянии, чтобы нажатие кнопки перехватывалось
+    # раньше, чем текст попадёт в get_hashrate/get_power/get_price/get_tariff
+    # как будто это введённое пользователем число.
+    restart_handler = MessageHandler(filters.Regex(f"^{RESTART_TEXT}$"), start)
+
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[CommandHandler("start", start), restart_handler],
         states={
             CHECK_SUBSCRIPTION: [
                 CallbackQueryHandler(check_subscription_callback)
@@ -756,16 +777,26 @@ def main() -> None:
             CHOOSING_MANUFACTURER: [CallbackQueryHandler(choose_manufacturer)],
             CHOOSING_FAMILY: [CallbackQueryHandler(choose_family)],
             CHOOSING_VARIANT: [CallbackQueryHandler(choose_variant)],
-            HASHRATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_hashrate)],
-            POWER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_power)],
-            PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_price)],
+            HASHRATE: [
+                restart_handler,
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_hashrate),
+            ],
+            POWER: [
+                restart_handler,
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_power),
+            ],
+            PRICE: [
+                restart_handler,
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_price),
+            ],
             TARIFF: [
+                restart_handler,
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND, get_tariff_and_calculate
-                )
+                ),
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("cancel", cancel), restart_handler],
     )
 
     application.add_handler(conv_handler)
