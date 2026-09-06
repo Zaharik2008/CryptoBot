@@ -63,7 +63,7 @@ from telegram.ext import (
 )
 
 # ==== НАСТРОЙКИ ====
-BOT_TOKEN = "8868576930:AAFs7Ebe6SRXSd2o_QO2bwMxvlxYzFGYT_Q"
+BOT_TOKEN = "8868576930:AAEEvDk5B3VPPj33IkSMEbT1lSLgIZMX7Zk"
 
 # Картинка-заставка для /start — должна лежать рядом с bot.py в репозитории
 # (тот же файл, который вы загружаете на GitHub).
@@ -77,7 +77,7 @@ WELCOME_IMAGE_PATH = os.path.join(BASE_DIR, "welcome.jpg")
 # Модель | Цена  (название модели должно точно совпадать с тем, что
 # показывает бот — см. названия в MODELS ниже, например "Antminer S21").
 # Если оставить пустой строкой — бот всегда будет спрашивать цену вручную.
-PRICE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/1rp9ysU2V3F4ynjJNHcP7l_unBvV-5v0K/export?format=csv&gid=45461405"
+PRICE_SHEET_CSV_URL = ""
 
 # Канал, на который нужно подписаться, чтобы пользоваться ботом.
 # ВАЖНО: бот должен быть добавлен в этот канал администратором — иначе
