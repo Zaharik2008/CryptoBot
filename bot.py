@@ -637,8 +637,10 @@ def calculate_profitability(
         f"будущем. Для нового расчёта — /start_\n\n"
         f"—\n"
         f"Приобрести это оборудование можно у нас, в Crypto Point:\n"
-        f"Игорь — `@Igor_Crypto_Point`\n"
-        f"Захар — `@zaHarik2008`"
+        f"Игорь: [написать в Telegram](https://t.me/Igor_Crypto_Point) · "
+        f"+7 938 338-90-53\n"
+        f"Захар: [написать в Telegram](https://t.me/zaHarik2008) · "
+        f"+7 908 778-03-04"
     )
 
 
