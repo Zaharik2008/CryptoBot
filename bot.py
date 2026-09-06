@@ -73,6 +73,7 @@ BANNER_COIN = os.path.join(BASE_DIR, "banner_coin.jpg")
 BANNER_MANUFACTURER = os.path.join(BASE_DIR, "banner_manufacturer.jpg")
 BANNER_MODEL = os.path.join(BASE_DIR, "banner_model.jpg")
 BANNER_VARIANT = os.path.join(BASE_DIR, "banner_variant.jpg")
+RESULT_IMAGE = os.path.join(BASE_DIR, "result_banner.jpg")
 
 # Ссылка на прайс-лист в Google Таблице, опубликованный как CSV.
 # Как получить: Файл → Поделиться → Опубликовать в интернете → выбрать
@@ -529,7 +530,7 @@ async def get_tariff_and_calculate(
         )
         return TARIFF
 
-    await update.message.reply_text("Считаю, секунду...")
+    thinking_message = await update.message.reply_text("Считаю, секунду...")
 
     try:
         result = calculate_profitability(
@@ -541,6 +542,10 @@ async def get_tariff_and_calculate(
         )
     except Exception as e:
         logger.error(f"Ошибка расчёта: {e}")
+        try:
+            await thinking_message.delete()
+        except Exception:
+            pass
         await update.message.reply_text(
             "Не удалось получить актуальный курс/сложность сети (проблема с "
             "подключением к источникам данных). Попробуйте, пожалуйста, "
@@ -549,12 +554,26 @@ async def get_tariff_and_calculate(
         return ConversationHandler.END
 
     try:
+        await thinking_message.delete()
+    except Exception:
+        pass
+
+    try:
+        with open(RESULT_IMAGE, "rb") as photo:
+            await update.message.reply_photo(
+                photo=photo, caption=result, parse_mode="Markdown"
+            )
+    except FileNotFoundError:
         await update.message.reply_text(result, parse_mode="Markdown")
     except Exception as e:
         # Если Telegram не смог разобрать Markdown-разметку — отправляем
         # обычным текстом, чтобы пользователь в любом случае получил ответ.
         logger.warning(f"Не удалось отправить с Markdown, отправляю без него: {e}")
-        await update.message.reply_text(result)
+        try:
+            with open(RESULT_IMAGE, "rb") as photo:
+                await update.message.reply_photo(photo=photo, caption=result)
+        except FileNotFoundError:
+            await update.message.reply_text(result)
 
     return ConversationHandler.END
 
