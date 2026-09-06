@@ -638,6 +638,9 @@ async def proceed_after_model_choice(
 
     await message.reply_text("Введите цену устройства в рублях (например: 250000)")
     return PRICE
+
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Отменено. Наберите /start, чтобы начать заново.")
     return ConversationHandler.END
 
