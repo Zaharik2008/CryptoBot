@@ -327,7 +327,13 @@ async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     coin = COINS[coin_code]
     context.user_data["coin_code"] = coin_code
 
-    await query.edit_message_text(f"Монета: {coin['title']}")
+    # Сообщение с меню монет может быть фото с подписью (если есть
+    # welcome.jpg) или обычным текстом (если картинки нет) — редактируем
+    # тем способом, который подходит.
+    try:
+        await query.edit_message_caption(caption=f"Монета: {coin['title']}")
+    except Exception:
+        await query.edit_message_text(f"Монета: {coin['title']}")
 
     manufacturers = list(MODELS[coin["algorithm"]].keys())
     keyboard = [
