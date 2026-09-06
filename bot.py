@@ -273,7 +273,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return CHECK_SUBSCRIPTION
 
-    return await show_coin_menu(update.message, context)
+    return await show_coin_menu(context.bot, update.message.chat_id, context)
 
 
 async def check_subscription_callback(
@@ -285,7 +285,7 @@ async def check_subscription_callback(
     if await is_subscribed(context.bot, user_id):
         await query.answer("Подписка подтверждена!")
         await query.message.delete()
-        return await show_coin_menu(query.message, context)
+        return await show_coin_menu(context.bot, query.message.chat_id, context)
 
     await query.answer(
         "Пока не вижу подписку. Убедитесь, что вы подписались, и попробуйте снова.",
@@ -294,7 +294,7 @@ async def check_subscription_callback(
     return CHECK_SUBSCRIPTION
 
 
-async def show_coin_menu(message, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def show_coin_menu(bot, chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Отправляет картинку-заставку и меню выбора монеты."""
     keyboard = [
         [InlineKeyboardButton(cfg["title"], callback_data=code)]
@@ -307,7 +307,8 @@ async def show_coin_menu(message, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     try:
         with open(WELCOME_IMAGE_PATH, "rb") as photo:
-            await message.reply_photo(
+            await bot.send_photo(
+                chat_id=chat_id,
                 photo=photo,
                 caption=caption,
                 reply_markup=InlineKeyboardMarkup(keyboard),
@@ -318,37 +319,34 @@ async def show_coin_menu(message, context: ContextTypes.DEFAULT_TYPE) -> int:
         logger.warning(
             f"Файл {WELCOME_IMAGE_PATH} не найден — отправляю без картинки"
         )
-        await message.reply_text(
-            caption, reply_markup=InlineKeyboardMarkup(keyboard)
+        await bot.send_message(
+            chat_id=chat_id, text=caption, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     return CHOOSING_COIN
 
 
-async def send_menu_photo(message, image_path: str, caption: str, keyboard):
+async def send_menu_photo(bot, chat_id: int, image_path: str, caption: str, keyboard):
     """Отправляет меню фирменной картинкой с подписью; если файл не найден
     рядом с bot.py — отправляет обычным текстом, чтобы бот не падал."""
     try:
         with open(image_path, "rb") as photo:
-            await message.reply_photo(
-                photo=photo, caption=caption, reply_markup=keyboard
+            await bot.send_photo(
+                chat_id=chat_id, photo=photo, caption=caption, reply_markup=keyboard
             )
     except FileNotFoundError:
         logger.warning(f"Файл {image_path} не найден — отправляю без картинки")
-        await message.reply_text(caption, reply_markup=keyboard)
+        await bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard)
 
 
-async def safe_edit_caption(query, text: str):
-    """Редактирует подпись/текст предыдущего сообщения независимо от того,
-    было оно картинкой или обычным текстом — чтобы не падать на попытке
-    отредактировать не тот тип сообщения."""
+async def delete_message_safe(query):
+    """Удаляет предыдущее сообщение (меню предыдущего шага). Если удалить
+    не получилось (например, прошло слишком много времени) — просто
+    игнорируем, чтобы бот не падал."""
     try:
-        await query.edit_message_caption(caption=text)
+        await query.message.delete()
     except Exception:
-        try:
-            await query.edit_message_text(text)
-        except Exception:
-            pass
+        pass
 
 
 async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -357,8 +355,9 @@ async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     coin_code = query.data
     coin = COINS[coin_code]
     context.user_data["coin_code"] = coin_code
+    chat_id = query.message.chat_id
 
-    await safe_edit_caption(query, f"Монета: {coin['title']}")
+    await delete_message_safe(query)
 
     manufacturers = list(MODELS[coin["algorithm"]].keys())
     keyboard = [
@@ -368,9 +367,10 @@ async def choose_coin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         [InlineKeyboardButton("✍️ Ввести вручную", callback_data="manual")]
     )
     await send_menu_photo(
-        query.message,
+        context.bot,
+        chat_id,
         BANNER_MANUFACTURER,
-        "Выберите производителя:",
+        f"Монета: {coin['title']}\n\nВыберите производителя:",
         InlineKeyboardMarkup(keyboard),
     )
     return CHOOSING_MANUFACTURER
@@ -382,12 +382,16 @@ async def choose_manufacturer(
     query = update.callback_query
     await query.answer()
     coin = COINS[context.user_data["coin_code"]]
+    chat_id = query.message.chat_id
 
     if query.data == "manual":
-        await safe_edit_caption(query, "Ввод вручную")
-        await query.message.reply_text(
-            f"Введите хешрейт устройства в {coin['hr_unit']} "
-            f"(например: {coin['hr_example']})",
+        await delete_message_safe(query)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"Введите хешрейт устройства в {coin['hr_unit']} "
+                f"(например: {coin['hr_example']})"
+            ),
             reply_markup=ReplyKeyboardRemove(),
         )
         return HASHRATE
@@ -402,11 +406,12 @@ async def choose_manufacturer(
         [InlineKeyboardButton(name, callback_data=f"f{idx}")]
         for idx, name in enumerate(families)
     ]
-    await safe_edit_caption(query, f"Производитель: {manufacturer}")
+    await delete_message_safe(query)
     await send_menu_photo(
-        query.message,
+        context.bot,
+        chat_id,
         BANNER_MODEL,
-        "Выберите модель:",
+        f"Производитель: {manufacturer}\n\nВыберите модель:",
         InlineKeyboardMarkup(keyboard),
     )
     return CHOOSING_FAMILY
@@ -417,6 +422,7 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await query.answer()
     coin = COINS[context.user_data["coin_code"]]
     manufacturer = context.user_data["manufacturer"]
+    chat_id = query.message.chat_id
 
     idx = int(query.data[1:])
     family_name = context.user_data["family_list"][idx]
@@ -424,16 +430,18 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     context.user_data["family_name"] = family_name
     context.user_data["variants"] = variants
 
-    await safe_edit_caption(query, f"Модель: {family_name}")
+    await delete_message_safe(query)
 
     if len(variants) == 1:
         # У модели только одна версия — подставляем её и идём дальше.
         label, hashrate, power_w = variants[0]
         context.user_data["hashrate"] = hashrate
         context.user_data["power_w"] = power_w
-        await query.message.reply_text(f"Версия: {label}")
+        await context.bot.send_message(
+            chat_id=chat_id, text=f"Модель: {family_name}\nВерсия: {label}"
+        )
         return await proceed_after_model_choice(
-            query.message, context, family_name
+            context.bot, chat_id, context, family_name
         )
 
     keyboard = [
@@ -441,9 +449,11 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         for i, (label, _, _) in enumerate(variants)
     ]
     await send_menu_photo(
-        query.message,
+        context.bot,
+        chat_id,
         BANNER_VARIANT,
-        "У этой модели несколько версий по хешрейту/охлаждению — выберите:",
+        f"Модель: {family_name}\n\n"
+        f"У этой модели несколько версий по хешрейту/охлаждению — выберите:",
         InlineKeyboardMarkup(keyboard),
     )
     return CHOOSING_VARIANT
@@ -452,15 +462,17 @@ async def choose_family(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def choose_variant(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
+    chat_id = query.message.chat_id
 
     idx = int(query.data[1:])
     label, hashrate, power_w = context.user_data["variants"][idx]
     context.user_data["hashrate"] = hashrate
     context.user_data["power_w"] = power_w
 
-    await safe_edit_caption(query, f"Версия: {label}")
+    await delete_message_safe(query)
+    await context.bot.send_message(chat_id=chat_id, text=f"Версия: {label}")
     return await proceed_after_model_choice(
-        query.message, context, context.user_data["family_name"]
+        context.bot, chat_id, context, context.user_data["family_name"]
     )
 
 
@@ -690,7 +702,7 @@ def get_price_from_sheet(model_name: str) -> Optional[float]:
 
 
 async def proceed_after_model_choice(
-    message, context: ContextTypes.DEFAULT_TYPE, family_name: str
+    bot, chat_id: int, context: ContextTypes.DEFAULT_TYPE, family_name: str
 ) -> int:
     """После того как хешрейт/потребление известны — пробует найти цену
     в прайс-листе; если не нашёл, просит ввести цену вручную."""
@@ -698,13 +710,18 @@ async def proceed_after_model_choice(
 
     if price is not None:
         context.user_data["price_rub"] = price
-        await message.reply_text(
-            f"Цена по вашему прайсу: {price:,.0f} ₽\n\n"
-            f"Тариф на электричество в руб/кВт·ч (например: 4.5)"
+        await bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"Цена по вашему прайсу: {price:,.0f} ₽\n\n"
+                f"Тариф на электричество в руб/кВт·ч (например: 4.5)"
+            ),
         )
         return TARIFF
 
-    await message.reply_text("Введите цену устройства в рублях (например: 250000)")
+    await bot.send_message(
+        chat_id=chat_id, text="Введите цену устройства в рублях (например: 250000)"
+    )
     return PRICE
 
 
